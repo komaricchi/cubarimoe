@@ -64,9 +64,10 @@ async def sensored_request_handler(req_handler, original_url):
         raise ProxyException("Downstream server timed out. Please try again.")
 
 
-async def get_wrapper(url, *, headers={}, use_proxy=False, **kwargs):
+async def get_wrapper(url, *, headers={}, use_proxy=False, secondary=False, **kwargs):
+    base = settings.EXTERNAL_PROXY_URL if not secondary else settings.SECONDARY_PROXY_URL
     request_url = (
-        f"{settings.EXTERNAL_PROXY_URL}/v1/cors/{encode(url)}?source=cubari_host"
+        f"{base}/v1/cors/{encode(url)}?source=cubari_host"
         if use_proxy
         else url
     )

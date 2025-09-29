@@ -1,6 +1,8 @@
 import re
+import json
 from datetime import datetime
 
+from bs4 import BeautifulSoup
 from django.shortcuts import redirect
 from django.urls import re_path
 
@@ -23,7 +25,7 @@ class Reddit(ProxySource):
             )
 
         return [
-            re_path(r"^(?:reddit|r/[a-z0-9_]+/comments)/(?P<meta_id>[\d\w]+)", handler),
+            re_path(r"^(?:reddit|r/[a-zA-Z0-9_]+/comments)/(?P<meta_id>[\d\w]+)", handler),
             re_path(r"^(?:gallery)/(?P<meta_id>[\d\w]+)", handler),
         ]
 
@@ -32,6 +34,96 @@ class Reddit(ProxySource):
         # transform thumbnail link from https://preview.redd.it/media_id.ext?junk
         #                           to https://i.redd.it/media_id.ext
         return re.sub(r"\?.*", "", url.replace("preview.redd.it", "i.redd.it"))
+
+    async def reddit_gallery(self, meta_id):
+        resp = await get_wrapper(
+            f"https://www.reddit.com/gallery/{meta_id}/",
+            allow_redirects=True,
+            use_proxy=True,
+        )
+
+        if resp.status != 200:
+            raise ProxyException("Failed to retrieve data from reddit.")
+
+        soup = BeautifulSoup(await resp.text(), "html.parser")
+        react_data = soup.find("script", {"id": "data"})
+
+        json_data_str = "{" + react_data.text.split("{", 1)[-1]
+        json_data = json.loads(json_data_str)
+        all_post_data = json_data.get("posts", {}).get("models", {})
+        post_metadata = [*all_post_data.values()][0]
+
+        if post_metadata.get("media", {}).get("type") != "gallery":
+            raise ProxyException("Cubari only supports reddit galleries.")
+
+        title = post_metadata.get("title", "Couldn't find title")
+        description = f"No description."  # No real description, unfortunately
+        author = post_metadata.get("author", "Unknown")
+        original_url = f"https://reddit.com/gallery/{meta_id}"
+        date = datetime.fromtimestamp(post_metadata.get("created", 0) / 1000)
+
+        post_media = post_metadata.get("media", {})
+
+        gallery_images = [
+            item["mediaId"] for item in post_media.get("gallery", {}).get("items", [])
+        ]
+
+        preview_images = [
+            post_media.get("mediaMetadata", {}).get(i, {}).get("s", {}).get("u", "")
+            for i in gallery_images
+        ]
+
+        # The preview URL is signed, so let's unsign it by doing software crimes
+        def image_unsigner(img: str):
+            raw_url = img.split("?")[0]
+            media_id = raw_url.split("-")[-1]
+
+            if media_id.startswith("http"):
+                return media_id.replace("preview.redd.it", "i.redd.it")
+            else:
+                return f"https://i.redd.it/{media_id}"
+
+        images = [image_unsigner(img) for img in preview_images]
+
+        if not images:
+            raise ProxyException("Couldn't parse out any images from the gallery.")
+
+        return {
+            "slug": meta_id,
+            "title": title,
+            "description": description,
+            "author": author,
+            "artist": "Unknown",
+            "cover": images[0],
+            "groups": {"1": "Reddit"},
+            "chapter_dict": {
+                "1": {
+                    "volume": "1",
+                    "title": title,
+                    "groups": {"1": images},
+                }
+            },
+            "chapter_list": [
+                [
+                    "1",
+                    "1",
+                    title,
+                    "1",
+                    "No group",
+                    [
+                        date.year,
+                        date.month - 1,
+                        date.day,
+                        date.hour,
+                        date.minute,
+                        date.second,
+                    ],
+                    "1",
+                ],
+            ],
+            "pages_list": images,
+            "original_url": original_url,
+        }
 
     async def reddit_api(self, meta_id):
         resp = await get_wrapper(
@@ -42,6 +134,7 @@ class Reddit(ProxySource):
                 "Accept-Language": "en-US,en;q=0.5",
             },
             allow_redirects=True,
+            use_proxy=True,
         )
 
         if resp.status != 200:

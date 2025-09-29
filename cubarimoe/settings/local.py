@@ -2,6 +2,7 @@ import os
 
 from .base import *
 
+INSTALLED_APPS = ["daphne"] + INSTALLED_APPS
 
 CANONICAL_ROOT_DOMAIN = "localhost:8000"
 
