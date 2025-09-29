@@ -13,6 +13,6 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-        "LOCATION": "memcached:11211",
+        "LOCATION": MEMCACHE_HOST,
     }
 }
