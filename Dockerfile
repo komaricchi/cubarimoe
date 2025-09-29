@@ -18,7 +18,6 @@ RUN python manage.py collectstatic --no-input
 
 RUN python manage.py makemigrations
 RUN python manage.py migrate
-RUN sed -i "s|\"o kawaii koto\"|\"$(openssl rand -base64 32)\"|" cubarimoe/settings/base.py
 ENV PYTHONUNBUFFERED 1
 
 EXPOSE 8000
