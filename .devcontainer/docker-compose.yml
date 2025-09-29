@@ -1,0 +1,5 @@
+services:
+  cubarimoe:
+    volumes:
+      - ..:/workspaces:cached
+    command: sleep infinity

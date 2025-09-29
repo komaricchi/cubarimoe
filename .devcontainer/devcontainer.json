@@ -1,12 +1,13 @@
 {
-	"name": "Cubari.moe Devcontainer",
-	"dockerComposeFile": [
-		"../docker-compose.yml"
-	],
-	"containerEnv": {
-		"DJANGO_SETTINGS_MODULE": "cubarimoe.settings.local"
-	},
-	"postCreateCommand": "python manage.py makemigrations && python manage.py migrate",
-	"service": "cubarimoe",
-	"workspaceFolder": "/${localWorkspaceFolderBasename}"
+    "name": "Cubari.moe Devcontainer",
+    "dockerComposeFile": [
+        "../docker-compose.yml",
+        "docker-compose.yml"
+    ],
+    "containerEnv": {
+        "DJANGO_SETTINGS_MODULE": "cubarimoe.settings.local"
+    },
+    "postCreateCommand": "python manage.py makemigrations && python manage.py migrate",
+    "service": "cubarimoe",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
 }
