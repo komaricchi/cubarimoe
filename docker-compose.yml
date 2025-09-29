@@ -1,0 +1,27 @@
+services:
+  cubarimoe:
+    container_name: cubarimoe
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: "cubarimoe.settings.prod"
+      MEMCACHE_HOST: "memcached:11211"
+    ports:
+      - 4000:8000
+    networks:
+      - cubari_nw
+    depends_on:
+      - memcached
+  memcached:
+    container_name: memcached
+    image: memcached:latest
+    entrypoint:
+      - memcached
+      - -m 512
+    restart: unless-stopped
+    networks:
+      - cubari_nw
+networks:
+  cubari_nw:

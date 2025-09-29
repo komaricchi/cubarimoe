@@ -7,6 +7,7 @@ from django.urls import re_path
 from ..source import ProxySource
 from ..source.data import ChapterAPI, SeriesAPI, SeriesPage
 from ..source.helpers import api_cache, get_wrapper
+from asgiref.sync import async_to_sync
 
 
 class NepNep(ProxySource):
@@ -16,8 +17,9 @@ class NepNep(ProxySource):
     def shortcut_instantiator(self):
         def handler(request, raw_url):
             if "/chapters/" in raw_url:
-                slug_name = self.get_slug_name_with_chapter_url(raw_url)
-                data = self.nn_scrape_common(slug_name)
+                # TODO: Move this whole thing to async 
+                slug_name = async_to_sync(self.get_slug_name_with_chapter_url)(raw_url)
+                data = async_to_sync(self.nn_scrape_common)(slug_name)
                 canonical_chapter = data["chapter_id_map"][raw_url.split(
                     "/")[-1]]
                 return redirect(
@@ -41,32 +43,32 @@ class NepNep(ProxySource):
         return normalized_url.split("/")[-2]
 
     @staticmethod
-    def get_slug_name_with_chapter_url(chapter_url):
+    async def get_slug_name_with_chapter_url(chapter_url):
         # An extra call here, can be optimised
         url = 'https://weebcentral.com/chapters/' + chapter_url.split("/")[-1]
-        resp = get_wrapper(url)
-        if resp.status_code == 200:
+        resp = await get_wrapper(url)
+        if resp.status == 200:
             pattern = r'\'series_id\'\s*:\s*\'([A-Z0-9]+)\''
-            match = re.search(pattern, resp.text)
+            match = re.search(pattern, await resp.text())
             series_id = match.group(1)
             return series_id
 
     @api_cache(prefix="nn_common_scrape_dt", time=600)
-    def nn_scrape_common(self, meta_id):
+    async def nn_scrape_common(self, meta_id):
         is_fallback_enabled = False
         series_url = 'https://weebcentral.com/series/' + meta_id
         chapter_list_url = 'https://weebcentral.com/series/' + \
             meta_id + "/full-chapter-list"
-        series_resp = get_wrapper(series_url)
-        chapter_list_resp = get_wrapper(chapter_list_url)
-        if chapter_list_resp.status_code != 200:
+        series_resp = await get_wrapper(series_url)
+        chapter_list_resp = await get_wrapper(chapter_list_url)
+        if chapter_list_resp.status != 200:
             chapter_list_url_fallback = 'https://weebcentral.com/series/' + \
                 meta_id + "/chapter-select?current_chapter=0&current_page=0"
-            chapter_list_resp = get_wrapper(chapter_list_url_fallback)
+            chapter_list_resp = await get_wrapper(chapter_list_url_fallback)
             is_fallback_enabled = True
-        if series_resp.status_code == 200 and chapter_list_resp.status_code == 200:
-            series_resp_data = series_resp.text
-            chapter_list_resp_data = chapter_list_resp.text
+        if series_resp.status == 200 and chapter_list_resp.status == 200:
+            series_resp_data = await series_resp.text()
+            chapter_list_resp_data = await chapter_list_resp.text()
             series_resp_soup = BeautifulSoup(series_resp_data, "html.parser")
             chapter_list_resp_soup = BeautifulSoup(
                 chapter_list_resp_data, "html.parser")
@@ -160,8 +162,8 @@ class NepNep(ProxySource):
         else:
             return None
 
-    def series_api_handler(self, meta_id):
-        data = self.nn_scrape_common(meta_id)
+    async def series_api_handler(self, meta_id):
+        data = await self.nn_scrape_common(meta_id)
         if data:
             return SeriesAPI(
                 slug=data["slug"],
@@ -177,13 +179,13 @@ class NepNep(ProxySource):
             return None
 
     @api_cache(prefix="nn_chapter_dt", time=3600)
-    def chapter_api_handler(self, meta_id):
+    async def chapter_api_handler(self, meta_id):
         url = 'https://weebcentral.com/chapters/' + meta_id + \
             "/images?is_prev=False&current_page=1&reading_style=long_strip"
-        resp = get_wrapper(url)
+        resp = await get_wrapper(url)
         images = []
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, "html.parser")
+        if resp.status == 200:
+            soup = BeautifulSoup(await resp.text(), "html.parser")
             images_elements = soup.select("img")
             for el in images_elements:
                 images.append(el.attrs["src"])
@@ -192,8 +194,8 @@ class NepNep(ProxySource):
         else:
             return None
 
-    def series_page_handler(self, meta_id):
-        data = self.nn_scrape_common(meta_id)
+    async def series_page_handler(self, meta_id):
+        data = await self.nn_scrape_common(meta_id)
         original_url = 'https://weebcentral.com/series/' + meta_id
 
         if data:

@@ -35,17 +35,17 @@ class Reddit(ProxySource):
         #                           to https://i.redd.it/media_id.ext
         return re.sub(r"\?.*", "", url.replace("preview.redd.it", "i.redd.it"))
 
-    def reddit_gallery(self, meta_id):
-        resp = get_wrapper(
+    async def reddit_gallery(self, meta_id):
+        resp = await get_wrapper(
             f"https://www.reddit.com/gallery/{meta_id}/",
             allow_redirects=True,
             use_proxy=True,
         )
 
-        if resp.status_code != 200:
+        if resp.status != 200:
             raise ProxyException("Failed to retrieve data from reddit.")
 
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(await resp.text(), "html.parser")
         react_data = soup.find("script", {"id": "data"})
 
         json_data_str = "{" + react_data.text.split("{", 1)[-1]
@@ -125,8 +125,8 @@ class Reddit(ProxySource):
             "original_url": original_url,
         }
 
-    def reddit_api(self, meta_id):
-        resp = get_wrapper(
+    async def reddit_api(self, meta_id):
+        resp = await get_wrapper(
             f"https://old.reddit.com/{meta_id}.json",
             headers={
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0",
@@ -137,10 +137,10 @@ class Reddit(ProxySource):
             use_proxy=True,
         )
 
-        if resp.status_code != 200:
+        if resp.status != 200:
             raise ProxyException("The reddit API didn't return properly.")
 
-        api_data = resp.json()
+        api_data = await resp.json()
         try:
             if isinstance(api_data, list):
                 api_data = api_data[0]["data"]["children"][0]["data"]
@@ -209,8 +209,8 @@ class Reddit(ProxySource):
         }
 
     @api_cache(prefix="reddit_series_dt", time=300)
-    def series_api_handler(self, meta_id):
-        data = self.reddit_api(meta_id)
+    async def series_api_handler(self, meta_id):
+        data = await self.reddit_api(meta_id)
         return (
             SeriesAPI(
                 slug=data["slug"],
@@ -227,8 +227,8 @@ class Reddit(ProxySource):
         )
 
     @api_cache(prefix="reddit_pages_dt", time=300)
-    def chapter_api_handler(self, meta_id):
-        data = self.reddit_api(meta_id)
+    async def chapter_api_handler(self, meta_id):
+        data = await self.reddit_api(meta_id)
         return (
             ChapterAPI(
                 pages=data["pages_list"], series=data["slug"], chapter=data["slug"]
@@ -238,8 +238,8 @@ class Reddit(ProxySource):
         )
 
     @api_cache(prefix="reddit_series_page_dt", time=300)
-    def series_page_handler(self, meta_id):
-        data = self.reddit_api(meta_id)
+    async def series_page_handler(self, meta_id):
+        data = await self.reddit_api(meta_id)
         return (
             SeriesPage(
                 series=data["title"],
